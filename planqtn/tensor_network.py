@@ -24,6 +24,7 @@ import numpy as np
 from galois import GF2
 
 from planqtn.contraction_visitor import ContractionVisitor
+from planqtn.linalg import gauss
 from planqtn.stabilizer_code_cost_fn import custom_cost_stabilizer_codes
 from planqtn.symplectic import sprint
 from planqtn.pauli import Pauli
@@ -872,33 +873,28 @@ class TensorNetwork:
                 open_legs=open_legs,
             )
 
-        # parity_check_enums = {}
+        tensor_cache = {}
 
         for node_idx, node in self.nodes.items():
             traced_legs = open_legs_per_node[node_idx]
-            # TODO: figure out tensor caching
-            # traced_leg_indices = "".join(
-            #     [str(i) for i in sorted([node.legs.index(leg) for leg in traced_legs])]
-            # )
-            # hkey = sstr(gauss(node.h)) + ";" + traced_leg_indices
-            # if hkey not in parity_check_enums:
-            #     parity_check_enums[hkey] = node.stabilizer_enumerator_polynomial(
-            #         open_legs=traced_legs
-            #     )
-            # else:
-            #     print("Found one!")
-            #     calc = node.stabilizer_enumerator_polynomial(open_legs=traced_legs)
-            #     assert (
-            #         calc == parity_check_enums[hkey]
-            #     ), f"for key {hkey}\n calc\n{calc}\n vs retrieved\n{parity_check_enums[hkey]}"
+            
+            open_leg_indices = [node.legs.index(leg) for leg in traced_legs]
 
-            # call the right type here...
-            tensor = node.stabilizer_enumerator_polynomial(
-                open_legs=traced_legs,
-                verbose=verbose,
-                progress_reporter=progress_reporter,
-                truncate_length=self.truncate_length,
-            )
+            # If equal parity check matrix + open legs, will be the same tensor
+            matrix_key = (tuple(tuple(int(x) for x in row) for row in gauss(node.h)), tuple(open_leg_indices))
+            
+            if(matrix_key in tensor_cache):
+                tensor = tensor_cache[matrix_key]
+            else:
+                tensor = node.stabilizer_enumerator_polynomial(
+                    open_legs=traced_legs,
+                    verbose=verbose,
+                    progress_reporter=progress_reporter,
+                    truncate_length=self.truncate_length,
+                )
+                # Save newly calculated tensor in the cache
+                tensor_cache[matrix_key] = tensor
+
             if isinstance(tensor, UnivariatePoly):
                 tensor = {(): tensor}
             self._ptes[node_idx] = _PartiallyTracedEnumerator(
