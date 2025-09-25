@@ -1,5 +1,6 @@
 """Symplectic operations and utilities."""
 
+import itertools
 from typing import TYPE_CHECKING, Any, List, Sequence, Tuple
 
 from galois import GF2
@@ -199,11 +200,45 @@ def sprint(h: GF2, end: str = "\n") -> None:
 def to_symplectic(matrix: NDArray[Any]) -> NDArray[Any]:
     """Converts a matrix with interleaved X and Z columns to standard symplectic form."""
     # Split into X and Z columns
-    x_bits = matrix[:, ::2]
+    x_bits = matrix[:, 0::2]
     z_bits = matrix[:, 1::2]
 
     # Combine into X|Z form
-    return np.hstack([x_bits, z_bits])
+    return np.concatenate((x_bits, z_bits), axis=1)
+
+
+def rank_gf2(matrix: np.ndarray) -> int:
+    """Compute rank over GF(2) using bit-packing for speed."""
+    m, n = matrix.shape
+    # Pack columns into 64-bit blocks
+    packed = np.packbits(matrix, axis=1, bitorder="little")
+    
+    rank = 0
+    for col in range(n):
+        word = col // 8
+        bit = col % 8
+        mask = 1 << bit
+
+        # Find pivot row
+        pivot_rows = np.where(packed[rank:, word] & mask)[0]
+        if pivot_rows.size == 0:
+            continue
+        pivot = pivot_rows[0] + rank
+
+        # Swap pivot row to the top
+        if pivot != rank:
+            packed[[rank, pivot]] = packed[[pivot, rank]]
+
+        # Eliminate below
+        for i in range(rank + 1, m):
+            if packed[i, word] & mask:
+                packed[i, :] ^= packed[rank, :]
+
+        rank += 1
+        if rank == m:
+            break
+
+    return rank
 
 
 def count_matching_stabilizers_ratio_all_pairs(
@@ -225,18 +260,12 @@ def count_matching_stabilizers_ratio_all_pairs(
     Returns:
         float: ratio of matching stabilizer pairs
     """
-    join_legs_matrix1 = to_symplectic(
-        np.hstack(
-            [pte1.h[:, pte1.get_col_indices({leg})] for leg in join_legs1]
-        ).astype(np.uint8)
-        & 1
-    )
-    join_legs_matrix2 = to_symplectic(
-        np.hstack(
-            [pte2.h[:, pte2.get_col_indices({leg})] for leg in join_legs2]
-        ).astype(np.uint8)
-        & 1
-    )
+    idx1 = np.concatenate([pte1.get_col_indices({leg}) for leg in join_legs1])
+    idx2 = np.concatenate([pte2.get_col_indices({leg}) for leg in join_legs2])
 
-    stacked = GF2(np.vstack([join_legs_matrix1, join_legs_matrix2]))
-    return float(2 ** (-rank(stacked)))
+    join_legs_matrix1 = to_symplectic(pte1.h[:, idx1])
+    join_legs_matrix2 = to_symplectic(pte2.h[:, idx2])
+
+    stacked = np.vstack([join_legs_matrix1, join_legs_matrix2])
+    stacked = np.array(stacked, dtype=np.uint8) & 1
+    return float(2 ** (-rank_gf2(stacked)))

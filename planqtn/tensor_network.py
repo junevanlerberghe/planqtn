@@ -347,6 +347,8 @@ class Contraction(Generic[T]):
             lambda node: node.copy(),
         )
 
+        print("cotengra opts: ", cotengra_opts)
+
         stabilizer_flops_fn = self._make_flops_cost_fn(contraction_for_conjoin)
 
         contengra_params = {
@@ -357,6 +359,7 @@ class Contraction(Generic[T]):
             "optlib": "cmaes",
             "methods": ["greedy"],
             "on_trial_error": "raise",
+            # "max_time" : 300,
         }
 
         if cotengra_opts is not None:
@@ -376,8 +379,8 @@ class Contraction(Generic[T]):
             progbar=not isinstance(progress_reporter, DummyProgressReporter),
         )
 
-        if verbose:
-            print("contengra params: ", contengra_params)
+        #if verbose:
+        print("contengra params: ", contengra_params)
 
         # Search params handling:
         if search_params is None:
@@ -385,11 +388,13 @@ class Contraction(Generic[T]):
 
         if search_params.get("sub_optimize_minimizer") == "custom_flops":
             search_params["sub_optimize_minimizer"] = AutoOptimizer(
-                minimize=stabilizer_flops_fn
+                minimize=stabilizer_flops_fn,
+                max_repeats=32
             )
         elif isinstance(search_params.get("sub_optimize_minimizer"), str):
             search_params["sub_optimize_minimizer"] = AutoOptimizer(
-                minimize=search_params.get("sub_optimize_minimizer")
+                minimize=search_params.get("sub_optimize_minimizer"),
+                max_repeats=32
             )
 
 
