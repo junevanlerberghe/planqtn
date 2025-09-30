@@ -388,13 +388,11 @@ class Contraction(Generic[T]):
 
         if search_params.get("sub_optimize_minimizer") == "custom_flops":
             search_params["sub_optimize_minimizer"] = AutoOptimizer(
-                minimize=stabilizer_flops_fn,
-                max_repeats=32
+                minimize=stabilizer_flops_fn
             )
         elif isinstance(search_params.get("sub_optimize_minimizer"), str):
             search_params["sub_optimize_minimizer"] = AutoOptimizer(
-                minimize=search_params.get("sub_optimize_minimizer"),
-                max_repeats=32
+                minimize=search_params.get("sub_optimize_minimizer")
             )
 
 
