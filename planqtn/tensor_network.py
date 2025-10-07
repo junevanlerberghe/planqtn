@@ -54,6 +54,7 @@ from planqtn.stabilizer_tensor_enumerator import (
 )
 from planqtn.tensor import TensorId, TensorLeg, TensorEnumerator, TensorEnumeratorKey
 from planqtn.tracable import Tracable, Trace
+from planqtn.operation_tracker import get_tracker
 
 T = TypeVar("T", bound=Tracable)
 
@@ -389,7 +390,7 @@ class Contraction(Generic[T]):
             )
 
         search_params["contraction_info"] = contraction_for_conjoin
-        return opt.search(self.inputs, self.output, self.size_dict)
+        return opt.search(self.inputs, self.output, self.size_dict, search_params=search_params)
 
     def _prep_cotengra_inputs(
         self,
@@ -1249,6 +1250,9 @@ class _PartiallyTracedEnumerator(Tracable["_PartiallyTracedEnumerator"]):
                 new_tensor[k] = self.tensor[k1] * other.tensor[k2]
                 self.truncate_if_needed(k, new_tensor)
 
+        operations = len(self.tensor.keys())*len(other.tensor.keys())
+        operation_tracker = get_tracker()
+        operation_tracker.increment(operations)
         return _PartiallyTracedEnumerator(
             self.node_ids + other.node_ids,
             tracable_legs=tuple(self.tracable_legs) + tuple(other.tracable_legs),
@@ -1312,6 +1316,7 @@ class _PartiallyTracedEnumerator(Tracable["_PartiallyTracedEnumerator"]):
                 f"legs: {len(self.tracable_legs)},{len(other.tracable_legs)}"
             )
 
+        operations = 0
         for k1 in progress_reporter.iterate(
             iterable=self.tensor.keys(),
             desc=(
@@ -1325,6 +1330,8 @@ class _PartiallyTracedEnumerator(Tracable["_PartiallyTracedEnumerator"]):
                     k1[i1] == k2[i2] for i1, i2 in zip(join_indices1, join_indices2)
                 ):
                     continue
+
+                operations += 1
                 wep1 = self.tensor[k1]
                 wep2 = other.tensor[k2]
 
@@ -1342,7 +1349,8 @@ class _PartiallyTracedEnumerator(Tracable["_PartiallyTracedEnumerator"]):
         tracable_legs += [
             (idx, leg) if isinstance(leg, int) else leg for idx, leg in open_legs2
         ]
-
+        operation_tracker = get_tracker()
+        operation_tracker.increment(operations)
         return _PartiallyTracedEnumerator(
             self.node_ids + other.node_ids,
             tracable_legs=tuple(leg for leg in tracable_legs),
