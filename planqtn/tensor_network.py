@@ -401,7 +401,7 @@ class Contraction(Generic[T]):
     ) -> Tuple[List[Tuple[str, ...]], List[str], Dict[str, int], List[TensorId]]:
         inputs = []
         output: List[str] = []
-        size_dict = {leg: 2 for leg in self.leg_indices.values()}
+        size_dict = {leg: 4 for leg in self.leg_indices.values()}
 
         input_names = []
 
