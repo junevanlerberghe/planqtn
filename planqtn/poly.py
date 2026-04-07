@@ -2,6 +2,7 @@
 
 from typing import Dict, Tuple, Union, Any, Generator, Optional
 
+import numpy as np
 from sympy import Poly, symbols
 import sympy
 
@@ -62,7 +63,7 @@ class UnivariatePoly:
             if len(d) > 0:
                 first_key = list(self.dict.keys())[0]
                 assert isinstance(
-                    first_key, int
+                    first_key, (int, np.integer)
                 ), f"First key is not an int: {first_key}"
         elif d is not None:
             raise ValueError(f"Unrecognized type: {type(d)}")
