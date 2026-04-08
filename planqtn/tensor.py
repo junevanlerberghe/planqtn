@@ -2,7 +2,7 @@
 
 from typing import Dict, Tuple
 
-from planqtn.poly import UnivariatePoly
+from planqtn.poly import UnivariatePoly, BivariatePoly
 
 
 TensorId = str | int | Tuple[int, int] | Tuple[str, int, int]
@@ -14,5 +14,5 @@ TensorLeg = Tuple[TensorId, int]
 TensorEnumeratorKey = Tuple[int, ...]
 """The tensor enumerator key is a tuple of integers."""
 
-TensorEnumerator = Dict[TensorEnumeratorKey, UnivariatePoly]
+TensorEnumerator = Dict[TensorEnumeratorKey, BivariatePoly]
 """The tensor enumerator is a dictionary of tuples of integers and univariate polynomials."""

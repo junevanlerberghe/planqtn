@@ -47,7 +47,7 @@ from planqtn.progress_reporter import (
     DummyProgressReporter,
     ProgressReporter,
 )
-from planqtn.poly import UnivariatePoly
+from planqtn.poly import BivariatePoly, UnivariatePoly
 from planqtn.stabilizer_tensor_enumerator import (
     StabilizerCodeTensorEnumerator,
     _index_legs,
@@ -594,7 +594,7 @@ class TensorNetwork:
             self.nodes = nodes_dict
 
         self._traces: List[Trace] = []
-        self._wep: Optional[TensorEnumerator | UnivariatePoly] = None
+        self._wep: Optional[TensorEnumerator | BivariatePoly] = None
         self._coset: Optional[GF2] = None
         self.truncate_length: Optional[int] = truncate_length
 
@@ -900,7 +900,7 @@ class TensorNetwork:
         cotengra: bool = True,
         cotengra_opts: Any = None,
         search_params: Any = None,
-    ) -> TensorEnumerator | UnivariatePoly:
+    ) -> TensorEnumerator | BivariatePoly:
         """Returns the reduced stabilizer enumerator polynomial for the tensor network.
 
         If open_legs is not empty, then the returned tensor enumerator polynomial is a dictionary of
@@ -1064,7 +1064,7 @@ class TensorNetwork:
         wep = self.stabilizer_enumerator_polynomial(
             verbose=verbose, progress_reporter=progress_reporter
         )
-        assert isinstance(wep, UnivariatePoly)
+        assert isinstance(wep, BivariatePoly)
         return wep.dict
 
     def set_truncate_length(self, truncate_length: int) -> None:
@@ -1085,12 +1085,12 @@ class _PartiallyTracedEnumerator(Tracable["_PartiallyTracedEnumerator"]):
         self,
         _node_ids: List[TensorId],
         tracable_legs: Tuple[TensorLeg, ...],
-        tensor: Dict[TensorEnumeratorKey, UnivariatePoly],
+        tensor: Dict[TensorEnumeratorKey, BivariatePoly],
         truncate_length: Optional[int],
     ):
         self._node_ids: List[TensorId] = _node_ids
         self.tracable_legs: Tuple[TensorLeg, ...] = tracable_legs
-        self.tensor: Dict[TensorEnumeratorKey, UnivariatePoly] = tensor
+        self.tensor: Dict[TensorEnumeratorKey, BivariatePoly] = tensor
 
         tensor_key_length = (
             len(list(self.tensor.keys())[0]) if len(self.tensor) > 0 else 0
@@ -1139,7 +1139,7 @@ class _PartiallyTracedEnumerator(Tracable["_PartiallyTracedEnumerator"]):
             progress_reporter=progress_reporter,
             truncate_length=truncate_length,
         )
-        if isinstance(tensor, UnivariatePoly):
+        if isinstance(tensor, BivariatePoly):
             tensor = {(): tensor}
         return cls(
             _node_ids=[node.tensor_id],
@@ -1243,7 +1243,7 @@ class _PartiallyTracedEnumerator(Tracable["_PartiallyTracedEnumerator"]):
             print(f"with {other}")
             for k, v in other.tensor.items():
                 print(f"{k}: {v}")
-        new_tensor: Dict[TensorEnumeratorKey, UnivariatePoly] = {}
+        new_tensor: Dict[TensorEnumeratorKey, BivariatePoly] = {}
         for k1 in progress_reporter.iterate(
             iterable=self.tensor.keys(),
             desc=f"PTE tensor product: {len(self.tensor)} x {len(other.tensor)} elements",
@@ -1296,7 +1296,7 @@ class _PartiallyTracedEnumerator(Tracable["_PartiallyTracedEnumerator"]):
 
         assert len(join_legs1) == len(join_legs2)
 
-        wep: Dict[TensorEnumeratorKey, UnivariatePoly] = defaultdict(UnivariatePoly)
+        wep: Dict[TensorEnumeratorKey, BivariatePoly] = defaultdict(BivariatePoly)
         open_legs1: List[TensorLeg] = [
             leg for leg in self.tracable_legs if leg not in join_legs1
         ]
@@ -1363,7 +1363,7 @@ class _PartiallyTracedEnumerator(Tracable["_PartiallyTracedEnumerator"]):
         )
 
     def truncate_if_needed(
-        self, key: TensorEnumeratorKey, wep: Dict[TensorEnumeratorKey, UnivariatePoly]
+        self, key: TensorEnumeratorKey, wep: Dict[TensorEnumeratorKey, BivariatePoly]
     ) -> None:
         """Truncate the weight enumerator polynomial if it exceeds the truncation length.
 

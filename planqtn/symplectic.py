@@ -31,6 +31,38 @@ def weight(op: GF2, skip_indices: Sequence[int] = ()) -> int:
     return int(np.count_nonzero(op[x_inds] | op[z_inds]))
 
 
+def split_weight(op: GF2, skip_indices: Sequence[int] = ()) -> Tuple[int, int]:
+    """Calculate the split X/Y and Z weight of a symplectic operator.
+
+    Args:
+        op: The symplectic operator.
+        skip_indices: Indices to skip.
+
+    Returns:
+        Tuple of (x_bucket_weight, z_bucket_weight).
+        x_bucket_weight includes both pure X and Y errors.
+        z_bucket_weight includes only pure Z errors.
+    """
+    n = len(op) // 2
+    x_inds = np.array([i for i in range(n) if i not in skip_indices])
+    z_inds = x_inds + n
+    
+    if len(x_inds) == 0 and len(z_inds) == 0:
+        return (0, 0)
+
+    x_bits = op[x_inds]
+    z_bits = op[z_inds]
+
+    # Pure Z errors: Z is 1 and X is 0
+    pure_z = (z_bits == 1) & (x_bits == 0)
+    count_z = int(np.count_nonzero(pure_z))
+
+    # X and Y errors: X is 1 (Z can be 0 or 1)
+    count_x_y = int(np.count_nonzero(x_bits))
+
+    return (count_x_y, count_z)
+
+
 def symp_to_str(vec: GF2, swapxz: bool = False) -> str:
     """Convert a symplectic operator to a string.
 

@@ -23,8 +23,8 @@ from planqtn.legos import LegoAnnotation
 from planqtn.linalg import gauss, rank
 from planqtn.parity_check import conjoin, self_trace, tensor_product
 from planqtn.progress_reporter import DummyProgressReporter, ProgressReporter
-from planqtn.poly import UnivariatePoly
-from planqtn.symplectic import omega, sslice, weight, sympl_to_pauli_repr
+from planqtn.poly import BivariatePoly, UnivariatePoly
+from planqtn.symplectic import omega, sslice, weight, sympl_to_pauli_repr, split_weight
 from planqtn.tracable import Tracable
 from planqtn.tensor import TensorId, TensorLeg, TensorEnumerator
 
@@ -49,18 +49,18 @@ class _SimpleStabilizerCollector:
         truncate_length: Optional[int] = None,
     ):
         self.coset = coset
-        self.tensor_wep = UnivariatePoly()
+        self.tensor_wep = BivariatePoly()
         self.open_cols = open_cols
         self.verbose = verbose
         self.truncate_length = truncate_length
 
     # pylint: disable=missing-function-docstring
     def collect(self, stabilizer: GF2) -> None:
-        stab_weight = weight(stabilizer + self.coset, skip_indices=self.open_cols)
+        stab_weight = split_weight(stabilizer + self.coset, skip_indices=self.open_cols)
         if self.truncate_length is not None and stab_weight > self.truncate_length:
             return
         # print(f"simple {stabilizer + self.coset} => {stab_weight}")
-        self.tensor_wep.add_inplace(UnivariatePoly({stab_weight: 1}))
+        self.tensor_wep.add_inplace(BivariatePoly({stab_weight: 1}))
 
     # pylint: disable=missing-function-docstring
     def finalize(self) -> None:
@@ -82,7 +82,7 @@ class _TensorElementCollector:
         self.verbose = verbose
         self.progress_reporter = progress_reporter
         self.matching_stabilizers: List[GF2] = []
-        self.tensor_wep: TensorEnumerator = defaultdict(UnivariatePoly)
+        self.tensor_wep: TensorEnumerator = defaultdict(BivariatePoly)
         self.truncate_length = truncate_length
 
     # pylint: disable=missing-function-docstring
@@ -103,10 +103,10 @@ class _TensorElementCollector:
             desc="Collecting stabilizers",
             total_size=len(self.matching_stabilizers),
         ):
-            stab_weight = weight(s + self.coset, skip_indices=self.open_cols)
+            stab_weight = split_weight(s + self.coset, skip_indices=self.open_cols)
             # print(f"tensor {s + self.coset} => {stab_weight}")
             key = sympl_to_pauli_repr(sslice(s, self.open_cols))
-            self.tensor_wep[key].add_inplace(UnivariatePoly({stab_weight: 1}))
+            self.tensor_wep[key].add_inplace(BivariatePoly({stab_weight: 1}))
 
 
 class StabilizerCodeTensorEnumerator(Tracable):
@@ -168,7 +168,7 @@ class StabilizerCodeTensorEnumerator(Tracable):
             len(self.legs) == self.n
         ), f"Number of legs {len(self.legs)} != qubit count {self.n} for h: {self.h}"
         # a dict is a wonky tensor - TODO: rephrase this to proper tensor
-        self._stabilizer_enums: Dict[sympy.Tuple, UnivariatePoly] = {}
+        self._stabilizer_enums: Dict[sympy.Tuple, BivariatePoly] = {}
 
         self.coset_flipped_legs = []
         if coset_flipped_legs is not None:
@@ -383,7 +383,7 @@ class StabilizerCodeTensorEnumerator(Tracable):
         verbose: bool = False,
         progress_reporter: ProgressReporter = DummyProgressReporter(),
         truncate_length: Optional[int] = None,
-    ) -> Union[TensorEnumerator, UnivariatePoly]:
+    ) -> Union[TensorEnumerator, BivariatePoly]:
 
         open_legs = _index_legs(self.tensor_id, open_legs)
         invalid_legs = self._validate_legs(open_legs)
@@ -452,7 +452,7 @@ class StabilizerCodeTensorEnumerator(Tracable):
         verbose: bool = False,
         progress_reporter: ProgressReporter = DummyProgressReporter(),
         truncate_length: Optional[int] = None,
-    ) -> Union[TensorEnumerator, UnivariatePoly]:
+    ) -> Union[TensorEnumerator, BivariatePoly]:
         """Compute the stabilizer enumerator polynomial.
 
         Note that this is a brute force method, and is not efficient for large codes, use it with
