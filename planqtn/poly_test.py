@@ -1,4 +1,4 @@
-from planqtn.poly import UnivariatePoly
+from planqtn.poly import BivariatePoly, UnivariatePoly
 
 
 def test_normalizer_enumerator_polynomial_513():
@@ -46,3 +46,30 @@ def test_normalizer_enumerator_polynomial_3x3RSC():
     assert (
         poly_a == stabilizer_polynomial
     ), f"{poly_a} is not equal to {stabilizer_polynomial}"
+
+
+def test_bivariate_poly_edge_cases():
+    """Test minw, leading_order_poly, and normalization for bivariate tuples."""
+    # Polynomial with various (x, z) weights
+    poly = BivariatePoly({
+        (1, 2): 5,  # total 3, x=1
+        (2, 1): 3,  # total 3, x=2
+        (0, 4): 1,  # total 4, x=0
+        (4, 0): 2   # total 4, x=4
+    })
+    
+    # minw should evaluate total weight first (3), then tie-break with x-weight, 
+    # so (1, 2) wins over (2, 1)
+    assert poly.minw() == ((1, 2), 5)
+    
+    # leading_order_poly should return ALL terms sharing the minimum total weight
+    leading = poly.leading_order_poly()
+    assert leading == BivariatePoly({(1, 2): 5, (2, 1): 3})
+
+    # Test normalization (should divide by the (0,0) coefficient if > 1)
+    unnorm = BivariatePoly({(0, 0): 2, (2, 2): 4})
+    assert unnorm.normalize() == BivariatePoly({(0, 0): 1, (2, 2): 2})
+    
+    # Test normalization ignoring polynomials with no (0,0) term
+    no_identity = BivariatePoly({(2, 2): 4})
+    assert no_identity.normalize() == no_identity

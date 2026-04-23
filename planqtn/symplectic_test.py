@@ -8,6 +8,7 @@ from planqtn.symplectic import (
     symp_to_str,
     weight,
     sympl_to_pauli_repr,
+    split_weight
 )
 
 
@@ -17,6 +18,14 @@ def test_weight():
     assert weight(GF2([0, 0, 0, 1, 0, 0])) == 1
     assert weight(GF2([0, 1, 0, 1, 0, 0])) == 2
     assert weight(GF2([0, 1, 1, 1, 1, 0])) == 3
+
+def test_split_weight():
+    assert split_weight(GF2([1, 0, 0, 0, 0, 0])) == (1, 0)
+    assert split_weight(GF2([1, 0, 0, 1, 0, 0])) == (1, 1)
+    assert split_weight(GF2([0, 0, 0, 1, 0, 0])) == (0, 1)
+    assert split_weight(GF2([0, 1, 0, 1, 0, 0])) == (1, 1)
+    assert split_weight(GF2([0, 1, 1, 1, 1, 0])) == (2, 2)
+    assert split_weight(GF2([0, 0, 0, 1, 1, 0])) == (0, 2)
 
 
 def test_symp_to_str():
