@@ -24,7 +24,7 @@ from planqtn.linalg import gauss, rank
 from planqtn.parity_check import conjoin, self_trace, tensor_product
 from planqtn.progress_reporter import DummyProgressReporter, ProgressReporter
 from planqtn.poly import BivariatePoly, UnivariatePoly
-from planqtn.symplectic import omega, sslice, weight, sympl_to_pauli_repr, split_weight
+from planqtn.symplectic import omega, split_xy_weight, sslice, weight, sympl_to_pauli_repr, split_weight
 from planqtn.tracable import Tracable
 from planqtn.tensor import TensorId, TensorLeg, TensorEnumerator
 
@@ -56,7 +56,7 @@ class _SimpleStabilizerCollector:
 
     # pylint: disable=missing-function-docstring
     def collect(self, stabilizer: GF2) -> None:
-        stab_weight = split_weight(stabilizer + self.coset, skip_indices=self.open_cols)
+        stab_weight = split_xy_weight(stabilizer + self.coset, skip_indices=self.open_cols)
         if self.truncate_length is not None and stab_weight > self.truncate_length:
             return
         # print(f"simple {stabilizer + self.coset} => {stab_weight}")
@@ -89,7 +89,7 @@ class _TensorElementCollector:
     def collect(self, stabilizer: GF2) -> None:
         if (
             self.truncate_length is not None
-            and weight(stabilizer + self.coset, skip_indices=self.open_cols)
+            and split_xy_weight(stabilizer + self.coset, skip_indices=self.open_cols)
             > self.truncate_length
         ):
             return
@@ -103,7 +103,7 @@ class _TensorElementCollector:
             desc="Collecting stabilizers",
             total_size=len(self.matching_stabilizers),
         ):
-            stab_weight = split_weight(s + self.coset, skip_indices=self.open_cols)
+            stab_weight = split_xy_weight(s + self.coset, skip_indices=self.open_cols)
             # print(f"tensor {s + self.coset} => {stab_weight}")
             key = sympl_to_pauli_repr(sslice(s, self.open_cols))
             self.tensor_wep[key].add_inplace(BivariatePoly({stab_weight: 1}))

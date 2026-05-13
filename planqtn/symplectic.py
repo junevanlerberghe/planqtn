@@ -58,6 +58,33 @@ def split_weight(op: GF2, skip_indices: Sequence[int] = ()) -> Tuple[int, int]:
 
     return (count_x, count_z)
 
+def split_xy_weight(op: GF2, skip_indices: Sequence[int] = ()) -> Tuple[int, int]:
+    """Calculate the split X,Y and Z weight of a symplectic operator.
+
+    Args:
+        op: The symplectic operator.
+        skip_indices: Indices to skip.
+
+    Returns:
+        Tuple of (xy_bucket_weight, z_bucket_weight).
+        xy_bucket_weight includes X and Y errors.
+        z_bucket_weight includes only pure Z errors.
+    """
+    n = len(op) // 2
+    x_inds = np.array([i for i in range(n) if i not in skip_indices])
+    z_inds = x_inds + n
+    
+    if len(x_inds) == 0 and len(z_inds) == 0:
+        return (0, 0)
+
+    x_bits = op[x_inds]
+    z_bits = op[z_inds]
+
+    count_z = int(np.count_nonzero((x_bits == 0) & (z_bits == 1)))
+    count_xy = int(np.count_nonzero(x_bits))
+
+    return (count_xy, count_z)
+
 
 def complete_weight(op: GF2, skip_indices: Sequence[int] = ()) -> Tuple[int, int, int, int]:
     """Calculate the exact counts of (I, X, Y, Z) in a symplectic operator."""
