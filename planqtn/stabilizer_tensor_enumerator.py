@@ -89,7 +89,7 @@ class _TensorElementCollector:
     def collect(self, stabilizer: GF2) -> None:
         if (
             self.truncate_length is not None
-            and split_xy_weight(stabilizer + self.coset, skip_indices=self.open_cols)
+            and sum(split_xy_weight(stabilizer + self.coset, skip_indices=self.open_cols))
             > self.truncate_length
         ):
             return
