@@ -1,5 +1,6 @@
 from galois import GF2
 import numpy as np
+import itertools
 import pytest
 from planqtn.networks.compass_code import (
     CompassCodeConcatenateAndSparsifyTN,
@@ -8,6 +9,66 @@ from planqtn.networks.compass_code import (
 from planqtn.legos import Legos
 from planqtn.poly import UnivariatePoly
 from planqtn.stabilizer_tensor_enumerator import StabilizerCodeTensorEnumerator
+
+### Helper functions for testing ###
+def rref(matrix: np.ndarray) -> np.ndarray:
+    """Row-reduced form over GF(2), zero rows dropped."""
+    m = np.array(matrix, dtype=np.int8) % 2
+    row = 0
+    for col in range(m.shape[1]):
+        pivot = next((r for r in range(row, m.shape[0]) if m[r, col]), None)
+        if pivot is None:
+            continue
+        m[[row, pivot]] = m[[pivot, row]]
+        for r in range(m.shape[0]):
+            if r != row and m[r, col]:
+                m[r] ^= m[row]
+        row += 1
+        if row == m.shape[0]:
+            break
+    return m[:row]
+ 
+ 
+def parity_check(tn) -> np.ndarray:
+    """Conjoined check matrix with columns in qubit order q = row + d * col."""
+    legs = [tn.qubit_to_node_and_leg(q)[1] for q in range(tn.n_qubits())]
+    node = tn.conjoin_nodes()
+    returned = list(node.legs)
+    # ensure the legs are in the same order as the legs in the tn for consistency between layouts
+    pos = {leg: i for i, leg in enumerate(returned)}
+    n = len(returned)
+    cols = [pos[leg] for leg in legs] + [n + pos[leg] for leg in legs]
+    return rref(np.array(node.h)[:, cols])
+
+def colorings(d: int):
+    """All 2**((d-1)**2) colorings of a d x d compass code."""
+    for bits in itertools.product([1, 2], repeat=(d - 1) ** 2):
+        yield np.array(bits).reshape(d - 1, d - 1)
+
+### Tests ###
+
+@pytest.mark.parametrize("coloring", list(colorings(3)), ids=str)
+def test_constructions_give_the_same_code_d3(coloring):
+    """Test for same stabilizer group, not just the same enumerator, for every d=3 coloring."""
+    expected = parity_check(CompassCodeDualSurfaceCodeLayoutTN(coloring))
+    tn = CompassCodeConcatenateAndSparsifyTN(coloring)
+    assert np.array_equal(parity_check(tn), expected), f"Concat & Sparsify differs for coloring {coloring}"
+
+
+@pytest.mark.parametrize(
+    "coloring",
+    [
+        np.full((4, 4), 2),  # every X-check keeps weight 2d, no carves at all
+        np.full((4, 4), 1),  # fully cut: every block is one row, so no Z-merges at all
+        np.array([[2, 2, 2, 2], [1, 1, 1, 1], [2, 2, 2, 2], [1, 1, 1, 1]]),  # 3-row blocks
+        np.array([[1, 2, 1, 2], [2, 1, 2, 1], [1, 2, 1, 2], [2, 1, 2, 1]]),  # d=5 rotated-surface-like
+    ],
+    ids=["shor", "fully_cut", "tall_blocks", "rotated_surface"],
+)
+def test_d5_edge_colorings(coloring):
+    """Test some distance-5 colorings"""
+    expected = parity_check(CompassCodeDualSurfaceCodeLayoutTN(coloring))
+    assert np.array_equal(parity_check(CompassCodeConcatenateAndSparsifyTN(coloring)), expected)
 
 
 @pytest.mark.parametrize(
@@ -64,6 +125,29 @@ def test_compass_code(TNClass):
 
     assert tn_wep == expected_wep
 
+    tn_rsc = TNClass(
+        [
+            [1, 2],
+            [2, 1],
+        ]
+    )
+    tn_rsc_wep = tn_rsc.stabilizer_enumerator_polynomial(cotengra=False)
+    expected_wep = StabilizerCodeTensorEnumerator(
+        GF2(
+            [
+                [1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 1, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 0, 0, 0, 0, 0],
+                [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 1, 1, 0, 1, 1],
+            ]
+        )
+    ).stabilizer_enumerator_polynomial()
+
+    assert tn_rsc_wep == expected_wep
 
 def test_compass_code_z_coset_weight_enumerator_weight1():
     coloring = np.array(

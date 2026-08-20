@@ -89,7 +89,7 @@ class CompassCodeConcatenateAndSparsifyTN(TensorNetwork):
         coset_error: Optional[GF2] = None,
         truncate_length: Optional[int] = None,
     ):
-        """Create a square compass code based on the coloring using the concatenate
+        """Build the compass code tensor network based on the coloring using the concatenate
         and sparsity method.
 
         Args:
@@ -118,7 +118,7 @@ class CompassCodeConcatenateAndSparsifyTN(TensorNetwork):
         connections_to_trace: Set[Tuple[TensorId, TensorId, int, int]] = set()
 
         for col in range(len(coloring[0])):
-            # blocks: qubit rows cut at every 1-plaquette in this column
+            # blocks: qubit rows to be carved out at every 1 (Z-plaquette) in this column
             col_blocks, cur = [], [0]
             for r in range(len(coloring)):
                 if coloring[r][col] == 1:
@@ -127,14 +127,11 @@ class CompassCodeConcatenateAndSparsifyTN(TensorNetwork):
                     cur.append(r + 1)
             col_blocks.append(cur)
 
-            # a full-height block means the column-pair is uncarved (X check keeps
-            # weight 2d). otherwise: k blocks -> k-1 carves. the remainder block's
-            # X check is implied by the others times the original weight-2d check.
-            col_blocks = [b for b in col_blocks if len(b) != d]
-            col_blocks = col_blocks[:-1]        # [REASONING] Sec 3.2 says "carve out
-                                                # of", but not which block is the
-                                                # remainder. Choice is ours; documented.
+            if col_blocks:
+                i = min(range(len(col_blocks)), key=lambda i: len(col_blocks[i]))
+                col_blocks = col_blocks[:i] + col_blocks[i+1:]
 
+            # Carve out the found blocks of X stabilizers
             for block in col_blocks:
                 block_size = len(block)
                 if block_size > 1:
@@ -143,7 +140,7 @@ class CompassCodeConcatenateAndSparsifyTN(TensorNetwork):
                         Legos.z_rep_code(2 * block_size), tensor_id=z_merge_key
                     )
                 for offset, j in enumerate(block):
-                    # print(f"\t applying X non-isometry to qubit in row {j} in column {col}, {col+1}")
+                    # Applying X non-isometry to qubit in row {j} in column {col}, {col+1}
                     nodes[("x", j, col)] = StabilizerCodeTensorEnumerator(
                         Legos.x_rep_code(4), tensor_id=("x", j, col)
                     )
@@ -151,11 +148,12 @@ class CompassCodeConcatenateAndSparsifyTN(TensorNetwork):
                     qubit2, leg2 = attachments[(j, col + 1)]
                     connections_to_trace.add((qubit1, ("x", j, col), leg1, 2))
                     connections_to_trace.add((qubit2, ("x", j, col), leg2, 3))
+                    
                     if block_size > 1:
                         connections_to_trace.add((("x", j, col), z_merge_key, 0, offset))
                         attachments[(j, col + 1)] = (z_merge_key, offset + block_size)
                     else:
-                        # print(f"\t m=1 X non-isometry so no z spider needed")
+                        # No Z-spider needed for m=1 X non-isometry
                         attachments[(j, col + 1)] = (("x", j, col), 0)
                     attachments[(j, col)] = (("x", j, col), 1)
 
@@ -169,7 +167,6 @@ class CompassCodeConcatenateAndSparsifyTN(TensorNetwork):
                 connection[0], connection[1], [connection[2]], [connection[3]]
             )
 
-        # print("\t after construction, nodes are: ", self.nodes.keys())
         self.n = d * d
         self.d = d
 
@@ -186,4 +183,3 @@ class CompassCodeConcatenateAndSparsifyTN(TensorNetwork):
 
     def n_qubits(self) -> int:
         return self.n
-
