@@ -116,105 +116,48 @@ class CompassCodeConcatenateAndSparsifyTN(TensorNetwork):
         nodes[(0, 0)] = nodes[(0, 0)].trace_with_stopper(Legos.stopper_i, d)
 
         connections_to_trace: Set[Tuple[TensorId, TensorId, int, int]] = set()
-        trace_with_stopper: Set[TensorId] = set()
 
-        # Iterate over each column to apply non-isometries based on the coloring
         for col in range(len(coloring[0])):
-            # Skip this column if there are no stabilizers to carve out
-            if not any(coloring[row][col] == 1 for row in range(len(coloring))):
-                continue
+            # blocks: qubit rows cut at every 1-plaquette in this column
+            col_blocks, cur = [], [0]
+            for r in range(len(coloring)):
+                if coloring[r][col] == 1:
+                    col_blocks.append(cur); cur = [r + 1]
+                else:
+                    cur.append(r + 1)
+            col_blocks.append(cur)
 
-            row = 0
-            while row < len(coloring):
-                if coloring[row][col] == 2:
-                    start_row = row
-                    while row + 1 < len(coloring) and coloring[row + 1][col] == 2:
-                        row += 1
-                    end_row = row + 1
-                    block_size = end_row - start_row + 1
-                    last_zero_row = start_row - 1
-                    next_one = next(
-                        (
-                            r
-                            for r in range(end_row + 1, len(coloring))
-                            if coloring[r][col] == 1
-                        ),
-                        len(coloring) + 1,
+            # a full-height block means the column-pair is uncarved (X check keeps
+            # weight 2d). otherwise: k blocks -> k-1 carves. the remainder block's
+            # X check is implied by the others times the original weight-2d check.
+            col_blocks = [b for b in col_blocks if len(b) != d]
+            col_blocks = col_blocks[:-1]        # [REASONING] Sec 3.2 says "carve out
+                                                # of", but not which block is the
+                                                # remainder. Choice is ours; documented.
+
+            for block in col_blocks:
+                block_size = len(block)
+                if block_size > 1:
+                    z_merge_key = ("z_merge", block[0], col)
+                    nodes[z_merge_key] = StabilizerCodeTensorEnumerator(
+                        Legos.z_rep_code(2 * block_size), tensor_id=z_merge_key
                     )
-
-                    gap_above = max(0, start_row - (last_zero_row + 1))
-                    gap_below = max(0, next_one - end_row - 1)
-                    if gap_above <= gap_below:
-                        # Merge upward (use rows from start_row to end_row)
-                        z_merge_key = ("z_merge", start_row, col)
-                        nodes[z_merge_key] = StabilizerCodeTensorEnumerator(
-                            Legos.z_rep_code(block_size), tensor_id=z_merge_key
-                        )
-
-                        for offset, j in enumerate(range(start_row, end_row + 1)):
-                            self._make_non_isometric_tensor(nodes, j, col)
-                            self._connect_non_isometric_tensor(
-                                j,
-                                col,
-                                z_merge_key,
-                                offset,
-                                attachments,
-                                connections_to_trace,
-                            )
-
+                for offset, j in enumerate(block):
+                    # print(f"\t applying X non-isometry to qubit in row {j} in column {col}, {col+1}")
+                    nodes[("x", j, col)] = StabilizerCodeTensorEnumerator(
+                        Legos.x_rep_code(4), tensor_id=("x", j, col)
+                    )
+                    qubit1, leg1 = attachments[(j, col)]
+                    qubit2, leg2 = attachments[(j, col + 1)]
+                    connections_to_trace.add((qubit1, ("x", j, col), leg1, 2))
+                    connections_to_trace.add((qubit2, ("x", j, col), leg2, 3))
+                    if block_size > 1:
+                        connections_to_trace.add((("x", j, col), z_merge_key, 0, offset))
+                        attachments[(j, col + 1)] = (z_merge_key, offset + block_size)
                     else:
-                        extra_rows = next_one - (end_row + 1)
-                        z_merge_key = ("z_merge", end_row + 1, col)
-                        nodes[z_merge_key] = StabilizerCodeTensorEnumerator(
-                            Legos.z_rep_code(extra_rows), tensor_id=z_merge_key
-                        )
-
-                        for offset, j in enumerate(range(end_row + 1, col)):
-                            self._make_non_isometric_tensor(nodes, j, col)
-                            self._connect_non_isometric_tensor(
-                                j,
-                                col,
-                                z_merge_key,
-                                offset,
-                                attachments,
-                                connections_to_trace,
-                            )
-
-                row += 1
-
-            top_rows, bottom_rows = [], []
-
-            # Find contiguous top block of 1s
-            row = 0
-            while row < len(coloring) and coloring[row][col] == 1:
-                top_rows.append(row)
-                row += 1
-
-            # Find contiguous bottom block of 1s
-            row = len(coloring) - 1
-            while row >= 0 and coloring[row][col] == 1:
-                bottom_rows.append(row + 1)
-                row -= 1
-
-            bottom_rows = list(reversed(bottom_rows))  # ensure increasing order
-
-            # Avoid duplication if full column is 1s
-            full_column_ones = len(top_rows) + len(bottom_rows) > len(coloring)
-            if full_column_ones:
-                # Only apply from the top to avoid duplication
-                bottom_rows = []
-                if len(top_rows) > 1:
-                    top_rows.append(top_rows[-1] + 1)
-
-            # Apply non-isometry at top rows
-            for label, rows in [("top", top_rows), ("bottom", bottom_rows)]:
-                for r in rows:
-                    print(f"adding non-isometry at col {col}, row {r} {label}")
-                    self._make_non_isometric_tensor(nodes, r, col)
-                    self._connect_non_isometric_tensor(
-                        r, col, None, None, attachments, connections_to_trace
-                    )
-                    trace_with_stopper.add(("z", r, col))
+                        # print(f"\t m=1 X non-isometry so no z spider needed")
+                        attachments[(j, col + 1)] = (("x", j, col), 0)
+                    attachments[(j, col)] = (("x", j, col), 1)
 
         super().__init__(nodes, truncate_length=truncate_length)
 
@@ -226,52 +169,13 @@ class CompassCodeConcatenateAndSparsifyTN(TensorNetwork):
                 connection[0], connection[1], [connection[2]], [connection[3]]
             )
 
-        for node in trace_with_stopper:
-            self.nodes[node] = self.nodes[node].trace_with_stopper(Legos.stopper_x, 2)
-
+        # print("\t after construction, nodes are: ", self.nodes.keys())
         self.n = d * d
         self.d = d
 
         self.attachments = attachments
         self.set_coset(
             coset_error if coset_error is not None else GF2.Zeros(2 * self.n)
-        )
-
-    def _connect_non_isometric_tensor(
-        self,
-        row: int,
-        col: int,
-        z_merge_key: Optional[Tuple[str, int, int]],
-        offset: Optional[int],
-        attachments: Dict[TensorId, Tuple[TensorId, int]],
-        connections_to_trace: Set[Tuple[TensorId, TensorId, int, int]],
-    ) -> None:
-        connections_to_trace.add((("x1", row, col), ("z", row, col), 0, 1))
-        connections_to_trace.add((("z", row, col), ("x2", row, col), 0, 1))
-
-        qubit1, leg1 = attachments[(row, col)]
-        qubit2, leg2 = attachments[(row, col + 1)]
-
-        connections_to_trace.add((qubit1, ("x1", row, col), leg1, 2))
-        connections_to_trace.add((qubit2, ("x2", row, col), leg2, 2))
-
-        attachments[(row, col)] = (("x1", row, col), 1)
-        attachments[(row, col + 1)] = (("x2", row, col), 0)
-
-        if z_merge_key is not None and offset is not None:
-            connections_to_trace.add((("z", row, col), z_merge_key, 2, offset))
-
-    def _make_non_isometric_tensor(
-        self, nodes: Dict[TensorId, StabilizerCodeTensorEnumerator], row: int, col: int
-    ) -> None:
-        nodes[("x1", row, col)] = StabilizerCodeTensorEnumerator(
-            Legos.x_rep_code(3), tensor_id=("x1", row, col)
-        )
-        nodes[("z", row, col)] = StabilizerCodeTensorEnumerator(
-            Legos.z_rep_code(3), tensor_id=("z", row, col)
-        )
-        nodes[("x2", row, col)] = StabilizerCodeTensorEnumerator(
-            Legos.x_rep_code(3), tensor_id=("x2", row, col)
         )
 
     def qubit_to_node_and_leg(self, q: int) -> Tuple[TensorId, TensorLeg]:
@@ -282,3 +186,4 @@ class CompassCodeConcatenateAndSparsifyTN(TensorNetwork):
 
     def n_qubits(self) -> int:
         return self.n
+
