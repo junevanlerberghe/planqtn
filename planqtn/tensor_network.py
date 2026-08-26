@@ -552,6 +552,7 @@ class TensorNetwork:
             Dict[TensorId, StabilizerCodeTensorEnumerator],
         ],
         truncate_length: Optional[int] = None,
+        poly_type: Optional[Type[Poly]] = UnivariatePoly,
     ):
         """Construct a tensor network.
 
@@ -569,7 +570,7 @@ class TensorNetwork:
             nodes: Dictionary mapping tensor IDs to
                 [`StabilizerCodeTensorEnumerator`][planqtn.StabilizerCodeTensorEnumerator] objects.
             truncate_length: Optional maximum length for truncating enumerator polynomials.
-
+            poly_type: Optional type of polynomial to use. 
         Raises:
             ValueError: If the nodes have inconsistent indexing.
             ValueError: If there are colliding index values in the nodes.
